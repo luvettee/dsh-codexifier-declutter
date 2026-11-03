@@ -1,0 +1,5 @@
+- insert:
+    - id: ui-declutter
+      name: '@local/dsh-ui-declutter'
+- id: ui-trajectory
+  disabled: true
