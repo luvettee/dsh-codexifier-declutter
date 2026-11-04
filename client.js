@@ -1153,6 +1153,11 @@ window.__ModuleLoader__.load({
       return h(React.Fragment, null, [h('button', { key: 'trigger', type: 'button', ref: trigger, disabled: locked || pending, className: 'dsh-codex-model-trigger', 'aria-label': `Access mode, current: ${names[current] ?? current}`, 'aria-haspopup': 'menu', 'aria-expanded': open, onClick: show }, [h('span', { key: 'icon', 'aria-hidden': true }, permissionIcon(current)), h('span', { key: 'label' }, names[current] ?? current)]), popup, dialog])
     }
 
+    // open the plugin manager from settings
+    function PluginManagerSettings({ close, openManager }) {
+      return h('div', { style: { padding: '16px 0' } }, h('button', { type: 'button', className: 'dsh-uideclutter-menuitem', onClick: () => { close(); openManager() } }, 'Open plugin manager'))
+    }
+
     // install styles and disclosure motion
     function StyleHost() {
       useEffect(() => {
@@ -1195,6 +1200,12 @@ window.__ModuleLoader__.load({
     return {
       inject: ['slots'],
       apply(ctx) {
+        ctx.inject(['slots', 'layout'], scope => {
+          scope.slots.inject('settings.section', () => scope.slots.register({
+            name: 'settings.section', id: 'plugin-manager', order: 16,
+            label: 'Plugin manager', inject: () => ({ openManager: () => scope.layout.selectPanel('plugins') }),
+          }, PluginManagerSettings))
+        })
         let reviewerStatus = null
         ctx.inject(['remote', 'remote.pluginManager'], scope => {
           const query = async () => {
