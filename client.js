@@ -96,6 +96,7 @@ window.__ModuleLoader__.load({
       '[class*="_sidebarCol"]{position:relative}',
       '.dsh-sidebar-exit-snapshot{position:absolute !important;inset:0 auto 0 0;pointer-events:none;z-index:2;overflow:hidden}',
       '.dsh-sidebar-exit-snapshot [class*="_wide"]{animation:none !important}',
+      '[class*="_exits"] > [class*="_sessionRow"],[class*="_exits"] > [class*="_sessionOverflowButton"]{visibility:hidden !important}',
       '.dsh-codex-model-trigger{display:inline-flex;align-items:center;gap:6px;border:0;border-radius:999px;corner-shape:round;background:transparent;color:var(--dsw-alias-label-primary);font-family:inherit;font-size:13px;font-weight:500;line-height:20px;padding:4px 8px;cursor:default}',
       '.dsh-codex-model-trigger:hover,.dsh-codex-model-trigger[aria-expanded="true"]{background:rgba(255,255,255,.08)}',
       '.dsh-codex-model-trigger .dsh-codex-effort{color:var(--dsw-alias-label-secondary)}',
@@ -1193,6 +1194,32 @@ window.__ModuleLoader__.load({
     return {
       inject: ['slots'],
       apply(ctx) {
+        ctx.effect(() => {
+          let revision = 0
+          const onWorkspaceToggle = event => {
+            const row = event.target instanceof Element ? event.target.closest('[data-row-key^="workspace:"][aria-expanded]') : null
+            const tree = row?.closest('[role="tree"]')
+            if (!tree || matchMedia('(prefers-reduced-motion: reduce)').matches) return
+            const expanded = row.getAttribute('aria-expanded')
+            const existing = new Set(tree.querySelectorAll('[data-row-key]'))
+            const currentRevision = ++revision
+            requestAnimationFrame(() => {
+              if (currentRevision !== revision || !tree.isConnected || row.getAttribute('aria-expanded') === expanded) return
+              for (const node of tree.querySelectorAll('[data-row-key]')) {
+                for (const animation of node.getAnimations()) {
+                  const frames = animation.effect?.getKeyframes?.()
+                  if (frames?.[0]?.transform && frames.at(-1)?.transform) {
+                    animation.effect.updateTiming({ duration: 260, easing: 'cubic-bezier(.16, 1, .3, 1)' })
+                  } else if (expanded === 'false' && !existing.has(node) && frames?.[0]?.opacity === '0' && frames.at(-1)?.opacity === '1') {
+                    animation.effect.updateTiming({ duration: 120, delay: 100, fill: 'backwards', easing: 'ease-out' })
+                  }
+                }
+              }
+            })
+          }
+          document.addEventListener('click', onWorkspaceToggle, true)
+          return () => { revision++; document.removeEventListener('click', onWorkspaceToggle, true) }
+        })
         ctx.inject(['slots', 'layout'], scope => {
           scope.slots.inject('settings.section', () => scope.slots.register({
             name: 'settings.section', id: 'plugin-manager', order: 16,
