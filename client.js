@@ -1089,15 +1089,14 @@ window.__ModuleLoader__.load({
     function permissionIcon(id) {
       const common = { width: 17, height: 17, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true }
       if (id === 'workspace-write') return h('svg', common, [h('path', { key: 'hand', d: 'M7 11V5.5a1.5 1.5 0 0 1 3 0V10m0-5V4a1.5 1.5 0 0 1 3 0v6m0-5a1.5 1.5 0 0 1 3 0v5m0-3a1.5 1.5 0 0 1 3 0v6c0 4-2.4 7-6.5 7H12c-3 0-4.5-1.2-6-3.2L3.5 13a1.7 1.7 0 0 1 2.7-2L7 12' })])
-      return h('svg', common, [h('path', { key: 'shield', d: 'M12 3.5 5.5 6v5.5c0 4 2.6 7 6.5 8.5 3.9-1.5 6.5-4.5 6.5-8.5V6L12 3.5Z' }), id === 'model-approval' ? h('path', { key: 'mark', d: 'm9 10 2 2-2 2m4 0h2' }) : h('path', { key: 'mark', d: 'M12 8v5m0 3h.01' })])
+      return h('svg', common, [h('path', { key: 'shield', d: 'M12 3.5 5.5 6v5.5c0 4 2.6 7 6.5 8.5 3.9-1.5 6.5-4.5 6.5-8.5V6L12 3.5Z' }), id === 'auto' ? h('path', { key: 'mark', d: 'm9 10 2 2-2 2m4 0h2' }) : h('path', { key: 'mark', d: 'M12 8v5m0 3h.01' })])
     }
 
     // render the access picker
-    function CodexPermissionSelect({ locked, useProjection, loadCatalog, loadReviewer, select }) {
+    function CodexPermissionSelect({ locked, useProjection, loadCatalog, select }) {
       const selection = useProjection('permissions')
       const [open, setOpen] = useState(false)
       const [options, setOptions] = useState(null)
-      const [reviewer, setReviewer] = useState(null)
       const [error, setError] = useState('')
       const [pending, setPending] = useState(false)
       const [confirm, setConfirm] = useState(null)
@@ -1116,8 +1115,8 @@ window.__ModuleLoader__.load({
         return () => cancelAnimationFrame(frame)
       }, [open, options])
       if (selection === undefined) return null
-      const names = { 'workspace-write': 'Ask for approval', 'model-approval': 'Approve for me', 'danger-full-access': 'Full access', 'read-only': 'Read only' }
-      const descriptions = { 'workspace-write': 'Ask before actions that need wider permissions', 'model-approval': 'A separate model reviews approval requests', 'danger-full-access': 'Unrestricted access to files and commands' }
+      const names = { 'workspace-write': 'Ask for approval', 'auto': 'Approve for me', 'model-approval': 'Legacy reviewer', 'danger-full-access': 'Full access', 'read-only': 'Read only' }
+      const descriptions = { 'workspace-write': 'Ask before actions that need wider permissions', 'auto': 'Experimental: DeepSeek reviews each supported tool call', 'danger-full-access': 'Unrestricted access to files and commands' }
       const current = selection.currentValue
       const show = async () => {
         if (open) { setOpen(false); return }
@@ -1125,13 +1124,8 @@ window.__ModuleLoader__.load({
         setPosition({ left: Math.max(8, Math.min(rect.left, window.innerWidth - 418)), bottom: window.innerHeight - rect.top + 6 })
         setError('')
         setOptions(null)
-        setReviewer(null)
         setOpen(true)
-        try {
-          const [catalog, status] = await Promise.all([loadCatalog(), loadReviewer()])
-          setOptions(catalog)
-          setReviewer(status)
-        } catch (failure) { setOptions([]); setReviewer(null); setError(`Could not check permission options or reviewer: ${failure?.message ?? String(failure)}`) }
+        try { setOptions(await loadCatalog()) } catch (failure) { setOptions([]); setError(`Could not load permission options: ${failure?.message ?? String(failure)}`) }
       }
       const submit = async id => {
         setConfirm(null)
@@ -1140,16 +1134,15 @@ window.__ModuleLoader__.load({
       }
       const choose = id => {
         if (id === current) { setOpen(false); return }
-        if (id === 'danger-full-access' || id === 'model-approval') { setOpen(false); setConfirm(id); return }
+        if (id === 'danger-full-access' || id === 'auto') { setOpen(false); setConfirm(id); return }
         void submit(id)
       }
       const available = new Set((options ?? []).map(item => item.value))
-      if (!reviewer) available.delete('model-approval')
-      const modes = ['workspace-write', 'model-approval', 'danger-full-access']
+      const modes = ['workspace-write', 'auto', 'danger-full-access']
       const popup = open && createPortal ? createPortal(h('div', { ref: menu, role: 'menu', 'aria-label': 'Permission mode', className: 'dsh-codex-menu dsh-codex-permission-menu', style: position,
         onKeyDown: event => { if (event.key === 'Escape') { setOpen(false); trigger.current?.focus() } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); const buttons = [...menu.current.querySelectorAll('button:not(:disabled)')]; const index = buttons.indexOf(document.activeElement); if (buttons.length) buttons[index < 0 ? (event.key === 'ArrowDown' ? 0 : buttons.length - 1) : (index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length].focus() } },
-      }, [h('div', { key: 'header', className: 'dsh-codex-menu-label' }, 'How should actions be approved?'), ...modes.map(id => h('button', { key: id, type: 'button', role: 'menuitemradio', 'aria-checked': current === id, disabled: pending || !available.has(id), className: 'dsh-codex-menu-row', onClick: () => choose(id) }, [h('span', { key: 'icon', className: 'dsh-codex-permission-icon', 'aria-hidden': true }, permissionIcon(id)), h('span', { key: 'copy', className: 'dsh-codex-permission-copy' }, [h('span', { key: 'title' }, names[id]), h('small', { key: 'description' }, error ? 'Could not verify availability' : options === null ? 'Checking availability…' : !available.has(id) ? (id === 'model-approval' && !reviewer ? 'Install and enable the Codex approval reviewer plugin to use this option' : 'Not available in this installation') : descriptions[id])]), current === id ? h('span', { key: 'check', 'aria-hidden': true }, '✓') : null])), error ? h('div', { key: 'error', role: 'alert', className: 'dsh-codex-menu-label' }, error) : null]), document.body) : null
-      const dialog = confirm && createPortal ? createPortal(h('div', { className: 'dsh-codex-confirm-backdrop' }, h('div', { role: 'dialog', 'aria-modal': true, 'aria-label': `Enable ${names[confirm]}`, className: 'dsh-codex-confirm' }, [h('strong', { key: 'title' }, `Enable ${names[confirm]}?`), h('p', { key: 'body' }, confirm === 'danger-full-access' ? 'This allows the agent unrestricted access to files and commands.' : 'An independent model will review approval requests. It may make mistakes and sends review details to the selected model provider.'), h('div', { key: 'actions', className: 'dsh-codex-confirm-actions' }, [h('button', { key: 'cancel', type: 'button', onClick: () => setConfirm(null) }, 'Cancel'), h('button', { key: 'confirm', type: 'button', onClick: () => { void submit(confirm) } }, 'Enable')])])), document.body) : null
+      }, [h('div', { key: 'header', className: 'dsh-codex-menu-label' }, 'How should actions be approved?'), ...modes.map(id => h('button', { key: id, type: 'button', role: 'menuitemradio', 'aria-checked': current === id, disabled: pending || !available.has(id), className: 'dsh-codex-menu-row', onClick: () => choose(id) }, [h('span', { key: 'icon', className: 'dsh-codex-permission-icon', 'aria-hidden': true }, permissionIcon(id)), h('span', { key: 'copy', className: 'dsh-codex-permission-copy' }, [h('span', { key: 'title' }, names[id]), h('small', { key: 'description' }, error ? 'Could not verify availability' : options === null ? 'Checking availability…' : !available.has(id) ? (id === 'auto' ? 'Enable Auto Authorization Review in experimental plugins' : 'Not available in this installation') : descriptions[id])]), current === id ? h('span', { key: 'check', 'aria-hidden': true }, '✓') : null])), error ? h('div', { key: 'error', role: 'alert', className: 'dsh-codex-menu-label' }, error) : null]), document.body) : null
+      const dialog = confirm && createPortal ? createPortal(h('div', { className: 'dsh-codex-confirm-backdrop' }, h('div', { role: 'dialog', 'aria-modal': true, 'aria-label': `Enable ${names[confirm]}`, className: 'dsh-codex-confirm' }, [h('strong', { key: 'title' }, `Enable ${names[confirm]}?`), h('p', { key: 'body' }, confirm === 'danger-full-access' ? 'This allows the agent unrestricted access to files and commands.' : 'DeepSeek’s experimental reviewer checks supported tool calls using your current model. Allowed calls run with full access. Reviews can make mistakes and use additional tokens.'), h('div', { key: 'actions', className: 'dsh-codex-confirm-actions' }, [h('button', { key: 'cancel', type: 'button', onClick: () => setConfirm(null) }, 'Cancel'), h('button', { key: 'confirm', type: 'button', onClick: () => { void submit(confirm) } }, 'Enable')])])), document.body) : null
       return h(React.Fragment, null, [h('button', { key: 'trigger', type: 'button', ref: trigger, disabled: locked || pending, className: 'dsh-codex-model-trigger', 'aria-label': `Access mode, current: ${names[current] ?? current}`, 'aria-haspopup': 'menu', 'aria-expanded': open, onClick: show }, [h('span', { key: 'icon', 'aria-hidden': true }, permissionIcon(current)), h('span', { key: 'label' }, names[current] ?? current)]), popup, dialog])
     }
 
@@ -1206,16 +1199,6 @@ window.__ModuleLoader__.load({
             label: 'Plugin manager', inject: () => ({ openManager: () => scope.layout.selectPanel('plugins') }),
           }, PluginManagerSettings))
         })
-        let reviewerStatus = null
-        ctx.inject(['remote', 'remote.pluginManager'], scope => {
-          const query = async () => {
-            const result = await scope.remote.pluginManager.listPlugins()
-            if (!result?.ok) throw new Error(result?.error?.message ?? 'Plugin inventory unavailable')
-            return result.value.some(item => item.moduleName === '@local/dsh-codex-reviewer' && item.enabled && item.fiberPhase === 'active')
-          }
-          reviewerStatus = query
-          return () => { if (reviewerStatus === query) reviewerStatus = null }
-        })
         ctx.inject(['slots', 'modelDirectories', 'sessions', 'remote', 'remote.session'], scope => {
           scope.slots.inject('conversation.input.model', () => scope.slots.register({
             name: 'conversation.input.model', id: 'codex-model-picker', priority: -1000,
@@ -1231,7 +1214,6 @@ window.__ModuleLoader__.load({
             name: 'conversation.input.permission', id: 'codex-permission-picker', priority: -1000,
             inject: sessionId => ({
               loadCatalog: async () => { const result = await scope.remote.permissionPresets.catalog(); if (!result.ok) throw result.error; return result.value.options },
-              loadReviewer: () => reviewerStatus ? reviewerStatus() : Promise.resolve(false),
               select: async preset => { const session = scope.sessions.binding(sessionId)?.session; if (!session) throw new Error('Session unavailable'); const result = await session.command(`/permission ${preset}`); if (!result.ok || !result.value.matched) throw new Error('Permission switch failed') },
             }),
           }, CodexPermissionSelect))
