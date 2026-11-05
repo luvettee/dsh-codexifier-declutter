@@ -12,6 +12,18 @@ dsh.cmd plugin --profile desktop add (Resolve-Path '.').Path
 
 restart deepseek harness. keep the folder in place after installing.
 
+## appearance
+
+open settings → **appearance** to pick a background for the start page and chats:
+
+- **ocean**: ascii sharks, with a species picker
+- **silk** and **waves**: webgl shaders
+- **custom**: your own png or video, kept across restarts
+
+there's also an optional **glass ask bar** with transparency and blur sliders. everything is off by default. animation pauses when the window is hidden and respects reduced motion.
+
+the background engines live in `src/appearance/` and get bundled into `client.js`. after editing them, run `node scripts/build-appearance.mjs`.
+
 ## approve for me
 
 enable **auto authorization review** in deepseek harness's experimental plugins. the option is greyed out until it is available.
